@@ -1,0 +1,16 @@
+:root {
+  color-scheme: dark;
+}
+* { margin: 0; padding: 0; }
+html, body, #root {
+  min-height: 100%;
+  min-height: 100dvh;
+}
+body {
+  background: #14110E;
+  /* respect iOS safe areas when launched fullscreen from the home screen */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+           env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+/* prevent iOS from zooming when focusing the score inputs */
+input { font-size: 16px; }
