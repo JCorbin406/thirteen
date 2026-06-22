@@ -192,8 +192,12 @@ const STYLES = `
 
 .t13-gcard{ background:var(--ink2); border:1px solid var(--line-soft); border-radius:12px;
   padding:12px 14px; margin-bottom:10px; }
-.t13-gmeta{ display:flex; justify-content:space-between; font-size:11px; color:var(--muted);
+.t13-gmeta{ display:flex; justify-content:space-between; align-items:center; font-size:11px; color:var(--muted);
   margin-bottom:9px; font-family:'DM Mono'; letter-spacing:.02em; }
+.t13-gmeta-r{ display:flex; align-items:center; gap:10px; }
+.t13-gdel{ background:transparent; border:none; color:var(--muted); cursor:pointer; padding:2px;
+  display:flex; align-items:center; border-radius:6px; transition:color .12s,background .12s; }
+.t13-gdel:hover{ color:var(--oxblood); background:var(--ink3); }
 .t13-gresults{ display:grid; grid-template-columns:repeat(auto-fill, minmax(120px,1fr)); gap:6px 14px; }
 .t13-gp{ display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:13px; min-width:0; }
 .t13-gp .nm{ color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
@@ -482,6 +486,16 @@ export default function Thirteen() {
     reader.readAsText(file);
   }
 
+  function deleteGame(id) {
+    const g = history.find((x) => x.id === id);
+    const when = g && g.finishedAt ? new Date(g.finishedAt).toLocaleDateString() : "this game";
+    if (confirm(`Delete ${when} from history? This can't be undone.`)) {
+      setHistory((prev) => prev.filter((x) => x.id !== id));
+      if (savedId === id) setSavedId(null); // re-allow saving if it was the live game's record
+      flashMsg("Game deleted");
+    }
+  }
+
   function clearHistory() {
     if (confirm("Delete all saved game history on this device? This can't be undone.")) {
       setHistory([]);
@@ -551,7 +565,12 @@ export default function Thirteen() {
                   <div className="t13-gcard" key={g.id}>
                     <div className="t13-gmeta">
                       <span>{new Date(g.finishedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</span>
-                      <span>{g.count} players</span>
+                      <span className="t13-gmeta-r">
+                        {g.count} players
+                        <button className="t13-gdel" onClick={() => deleteGame(g.id)} aria-label="Delete this game" title="Delete this game">
+                          <Trash2 size={13} />
+                        </button>
+                      </span>
                     </div>
                     <div className="t13-gresults">
                       {[...g.results].sort((a, b) => a.total - b.total).map((r, i) => (
