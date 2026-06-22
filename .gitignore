@@ -5,3 +5,8 @@ dist-ssr
 .DS_Store
 .vscode/*
 !.vscode/extensions.json
+
+# Claude Code working files (local only)
+CLAUDE.md
+PROJECT_CONTEXT.md
+.claude/

@@ -17,6 +17,11 @@ const SUITS = ["♠", "♥", "♦", "♣"];
 const isRed = (s) => s === "♥" || s === "♦";
 const STORAGE_KEY = "thirteen:game:v1";
 
+const ordinal = (n) => {
+  const s = ["th", "st", "nd", "rd"], v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+};
+
 const STYLES = `
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=Archivo:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
 
@@ -70,11 +75,18 @@ const STYLES = `
 .t13-chip{ flex:1 1 90px; min-width:0; background:var(--ink2); border:1px solid var(--line-soft);
   border-radius:12px; padding:10px 12px; position:relative; }
 .t13-chip.lead{ border-color:var(--brass); }
+.t13-chip.last{ border-color:var(--oxblood-d); }
 .t13-chip .nm{ font-size:12px; color:var(--muted); white-space:nowrap; max-width:120px;
   overflow:hidden; text-overflow:ellipsis; display:flex; align-items:center; gap:5px; }
 .t13-chip .tot{ font-family:'DM Mono'; font-size:26px; margin-top:2px; line-height:1; }
 .t13-chip.lead .tot{ color:var(--brass); }
+.t13-chip.last .tot{ color:var(--oxblood); }
 .t13-crown{ color:var(--brass); }
+.t13-rank{ font-family:'DM Mono'; font-size:10px; color:var(--muted); background:var(--ink3);
+  border:1px solid var(--line-soft); border-radius:5px; padding:1px 5px; flex:none; }
+.t13-chip.lead .t13-rank{ color:var(--brass); border-color:var(--brass-d); }
+.t13-chip.last .t13-rank{ color:var(--oxblood); border-color:var(--oxblood-d); }
+.t13-poop{ font-size:12px; line-height:1; flex:none; }
 
 .t13-banner{ display:flex; align-items:center; gap:9px; background:var(--ink2);
   border:1px solid var(--line-soft); border-left:3px solid var(--brass); border-radius:10px;
@@ -83,15 +95,18 @@ const STYLES = `
 .t13-banner .pip{ color:var(--brass); font-size:16px; }
 
 /* scorecard */
-.t13-card{ background:var(--bone); border-radius:14px; padding:6px; overflow-x:auto;
+.t13-card{ background:var(--bone); border-radius:14px; padding:6px; overflow:visible;
   box-shadow:0 18px 40px -18px rgba(0,0,0,.7); }
 .t13-grid{ display:grid; width:100%; }
 .t13-cell{ border-bottom:1px solid var(--line); display:flex; align-items:center;
   justify-content:center; min-height:46px; min-width:0; }
+.t13-sep{ border-right:1px solid var(--line); }
 .t13-col1{ position:sticky; left:0; z-index:2; background:var(--bone);
   border-right:1px solid var(--line); }
 .t13-hd{ font-family:'Archivo'; font-weight:600; font-size:11px; color:var(--ink-on-bone);
-  padding:5px 3px; min-height:40px; text-align:center; line-height:1.12; }
+  padding:5px 3px; min-height:40px; text-align:center; line-height:1.12;
+  position:sticky; top:0; z-index:3; background:var(--bone); }
+.t13-col1.t13-hd{ z-index:4; }
 .t13-name{ display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
   overflow:hidden; word-break:break-word; max-width:100%; }
 .t13-corner{ color:var(--muted); font-size:10px; letter-spacing:.14em; text-transform:uppercase; }
@@ -206,6 +221,20 @@ export default function Thirteen() {
   }, [scores, players, count]);
 
   const bestTotal = totals.length ? Math.min(...totals) : 0;
+  const worstTotal = totals.length ? Math.max(...totals) : 0;
+
+  // standings ordered by rank (lowest total = 1st). Ties share a place
+  // (competition ranking: 1, 2, 2, 4).
+  const ranked = useMemo(() => {
+    const rows = players.map((nm, i) => ({ i, nm, total: totals[i] }));
+    rows.sort((a, b) => a.total - b.total);
+    let place = 0, prev = null;
+    rows.forEach((row, idx) => {
+      if (row.total !== prev) { place = idx + 1; prev = row.total; }
+      row.place = place;
+    });
+    return rows;
+  }, [players, totals]);
 
   // within row r, mark its high scorer(s) — they deal the NEXT round.
   // skipped on round 13 (no round after it) and on all-zero rows.
@@ -287,14 +316,20 @@ export default function Thirteen() {
               </div>
             )}
 
-            {/* standings */}
+            {/* standings — ordered by rank, lowest total first */}
             <div className="t13-rail">
-              {players.map((nm, i) => {
-                const lead = totals[i] === bestTotal && totals.some((t) => t > bestTotal);
+              {ranked.map(({ i, nm, total, place }) => {
+                const lead = total === bestTotal && totals.some((t) => t > bestTotal);
+                const last = total === worstTotal && totals.some((t) => t < worstTotal);
                 return (
-                  <div className={`t13-chip ${lead ? "lead" : ""}`} key={i}>
-                    <div className="nm">{lead && <Crown size={12} className="t13-crown" />}{nm}</div>
-                    <div className="tot">{totals[i]}</div>
+                  <div className={`t13-chip ${lead ? "lead" : ""} ${last ? "last" : ""}`} key={i}>
+                    <div className="nm">
+                      <span className="t13-rank">{ordinal(place)}</span>
+                      {lead && <Crown size={12} className="t13-crown" />}
+                      {last && <span className="t13-poop" role="img" aria-label="last place">💩</span>}
+                      {nm}
+                    </div>
+                    <div className="tot">{total}</div>
                   </div>
                 );
               })}
@@ -321,7 +356,7 @@ export default function Thirteen() {
                 {/* header row */}
                 <div className="t13-cell t13-col1 t13-hd"><span className="t13-corner">Wild</span></div>
                 {players.map((nm, i) => (
-                  <div className="t13-cell t13-hd" key={i}><span className="t13-name" title={nm}>{nm}</span></div>
+                  <div className={`t13-cell t13-hd ${i < count - 1 ? "t13-sep" : ""}`} key={i}><span className="t13-name" title={nm}>{nm}</span></div>
                 ))}
 
                 {/* round rows */}
@@ -338,7 +373,7 @@ export default function Thirteen() {
                         <div className="t13-rnum">R{r + 1}</div>
                       </div>
                       {players.map((_, p) => (
-                        <div className={`t13-cell t13-scorecell ${dset.has(p) ? "dealer" : ""}`} key={p}>
+                        <div className={`t13-cell t13-scorecell ${dset.has(p) ? "dealer" : ""} ${p < count - 1 ? "t13-sep" : ""}`} key={p}>
                           <input
                             className="t13-score"
                             inputMode="numeric"
@@ -357,7 +392,7 @@ export default function Thirteen() {
                   <span className="t13-totlabel">Total</span>
                 </div>
                 {players.map((_, p) => (
-                  <div className={`t13-cell t13-totcell ${totals[p] === bestTotal && totals.some((t) => t > bestTotal) ? "best" : ""}`} key={p}>
+                  <div className={`t13-cell t13-totcell ${totals[p] === bestTotal && totals.some((t) => t > bestTotal) ? "best" : ""} ${p < count - 1 ? "t13-sep" : ""}`} key={p}>
                     {totals[p]}
                   </div>
                 ))}
