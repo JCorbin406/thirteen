@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { Crown, RotateCcw, ChevronLeft, Trophy, Download, Upload, Trash2, ClipboardCopy } from "lucide-react";
+import { Crown, RotateCcw, ChevronLeft, Trophy, Download, Upload, Trash2, ClipboardCopy, Calendar } from "lucide-react";
 
 /* ------------------------------------------------------------------ *
  * Thirteen — scorecard for the card game 13, where a different
@@ -27,6 +27,22 @@ const newId = () =>
   (typeof crypto !== "undefined" && crypto.randomUUID)
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+/* ISO timestamp -> local YYYY-MM-DD (for <input type="date"> value) */
+const ymdLocal = (iso) => {
+  const d = new Date(iso);
+  if (isNaN(d)) return "";
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+};
+
+/* ISO timestamp -> friendly local date label */
+const fmtDate = (iso) => {
+  const d = new Date(iso);
+  return isNaN(d)
+    ? "Unknown date"
+    : d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+};
 
 const STYLES = `
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=Archivo:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
@@ -111,7 +127,7 @@ const STYLES = `
   border-right:1px solid var(--line); }
 .t13-hd{ font-family:'Archivo'; font-weight:600; font-size:11px; color:var(--ink-on-bone);
   padding:5px 3px; min-height:40px; text-align:center; line-height:1.12;
-  position:sticky; top:0; z-index:3; background:var(--bone); }
+  position:sticky; top:env(safe-area-inset-top, 0px); z-index:3; background:var(--bone); }
 .t13-col1.t13-hd{ z-index:4; }
 .t13-name{ display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
   overflow:hidden; word-break:break-word; max-width:100%; }
@@ -195,6 +211,14 @@ const STYLES = `
 .t13-gmeta{ display:flex; justify-content:space-between; align-items:center; font-size:11px; color:var(--muted);
   margin-bottom:9px; font-family:'DM Mono'; letter-spacing:.02em; }
 .t13-gmeta-r{ display:flex; align-items:center; gap:10px; }
+.t13-gdate{ position:relative; display:inline-flex; align-items:center; gap:5px;
+  font-family:'DM Mono'; font-size:11px; color:var(--muted); cursor:pointer;
+  border:1px solid transparent; border-radius:6px; padding:2px 6px; margin:-2px -6px;
+  transition:border-color .12s,color .12s; }
+.t13-gdate:hover{ border-color:var(--line-soft); color:var(--bone2); }
+.t13-gdate:focus-within{ border-color:var(--brass); color:var(--bone); }
+.t13-gdate input{ position:absolute; inset:0; width:100%; height:100%;
+  opacity:0; cursor:pointer; border:none; }
 .t13-gdel{ background:transparent; border:none; color:var(--muted); cursor:pointer; padding:2px;
   display:flex; align-items:center; border-radius:6px; transition:color .12s,background .12s; }
 .t13-gdel:hover{ color:var(--oxblood); background:var(--ink3); }
@@ -486,6 +510,21 @@ export default function Thirteen() {
     reader.readAsText(file);
   }
 
+  /* correct a saved game's date (keeps the original time-of-day) */
+  function setGameDate(id, ymd) {
+    if (!ymd) return;
+    const [y, m, d] = ymd.split("-").map(Number);
+    setHistory((prev) =>
+      prev.map((g) => {
+        if (g.id !== id) return g;
+        const base = g.finishedAt && !isNaN(new Date(g.finishedAt)) ? new Date(g.finishedAt) : new Date();
+        base.setFullYear(y, m - 1, d);
+        return { ...g, finishedAt: base.toISOString() };
+      })
+    );
+    flashMsg("Date updated");
+  }
+
   function deleteGame(id) {
     const g = history.find((x) => x.id === id);
     const when = g && g.finishedAt ? new Date(g.finishedAt).toLocaleDateString() : "this game";
@@ -564,7 +603,17 @@ export default function Thirteen() {
                 return (
                   <div className="t13-gcard" key={g.id}>
                     <div className="t13-gmeta">
-                      <span>{new Date(g.finishedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</span>
+                      <label className="t13-gdate" title="Tap to change the date">
+                        <Calendar size={11} />
+                        {fmtDate(g.finishedAt)}
+                        <input
+                          type="date"
+                          value={ymdLocal(g.finishedAt)}
+                          onChange={(e) => setGameDate(g.id, e.target.value)}
+                          onClick={(e) => { try { e.currentTarget.showPicker?.(); } catch (err) {} }}
+                          aria-label="Date this game was played"
+                        />
+                      </label>
                       <span className="t13-gmeta-r">
                         {g.count} players
                         <button className="t13-gdel" onClick={() => deleteGame(g.id)} aria-label="Delete this game" title="Delete this game">
